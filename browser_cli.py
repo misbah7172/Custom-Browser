@@ -1,91 +1,126 @@
 #!/usr/bin/env python3
 """
-Console-based browser implementation with tracking and security features
+Console-based web browser with tracking and firewall features
 """
-import sys
 import os
+import sys
 import re
-import socket
-import sqlite3
-import urllib.parse
-import urllib.request
-import datetime
-import html
 import json
-from urllib.error import URLError, HTTPError
-from http.client import HTTPResponse
+import sqlite3
+import socket
+import webbrowser
+from urllib.parse import urlparse, quote_plus
+import datetime
+from html.parser import HTMLParser
+# Import libraries for web requests
+import urllib.request
+import urllib.parse
+import urllib.error
 
+# Check if requests is properly available 
+try:
+    import requests
+    # Test if requests works properly
+    requests.get
+    REQUESTS_AVAILABLE = True
+except (ImportError, AttributeError):
+    REQUESTS_AVAILABLE = False
+    print("Using built-in urllib for web requests.")
+
+# Database Manager for tracking
 class DatabaseManager:
-    """Manages website visit tracking and firewall settings"""
-    
-    def __init__(self):
-        """Initialize the database"""
-        self.db_path = os.path.expanduser("~/.browser_tracker.db")
-        self.conn = None
-        self.cursor = None
-        self.connect()
-        self.create_tables()
-        
-        # List of blocked domains
-        self.blocked_domains = self.get_blocked_domains()
+    def __init__(self, incognito=False):
+        self.incognito = incognito
+        if not incognito:
+            self.db_path = os.path.expanduser("~/.browser_data.db")
+            self.connect()
+            self.create_tables()
+            self.blocked_domains = self.get_blocked_domains()
+        else:
+            self.conn = None
+            self.cursor = None
+            self.blocked_domains = []
     
     def connect(self):
-        """Connect to the SQLite database"""
-        self.conn = sqlite3.connect(self.db_path)
-        self.conn.row_factory = sqlite3.Row
-        self.cursor = self.conn.cursor()
+        try:
+            self.conn = sqlite3.connect(self.db_path)
+            self.conn.row_factory = sqlite3.Row
+            self.cursor = self.conn.cursor()
+        except Exception as e:
+            print(f"Database error: {e}")
+            self.conn = None
+            self.cursor = None
     
     def create_tables(self):
-        """Create database tables if they don't exist"""
-        # Table for visited websites
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS visits (
-                id INTEGER PRIMARY KEY,
-                url TEXT NOT NULL,
-                title TEXT,
-                ip_address TEXT,
-                location TEXT,
-                visit_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Table for blocked domains (firewall)
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS firewall (
-                id INTEGER PRIMARY KEY,
-                domain TEXT UNIQUE NOT NULL,
-                reason TEXT,
-                blocked_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        self.conn.commit()
-    
-    def add_visit(self, url, title=None):
-        """Record a website visit with its IP address and location"""
+        if self.incognito or not self.cursor:
+            return
+            
         try:
-            # Parse domain from URL
-            parsed_url = urllib.parse.urlparse(url)
+            # Table for visited sites
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS visits (
+                    id INTEGER PRIMARY KEY,
+                    url TEXT NOT NULL,
+                    title TEXT,
+                    ip_address TEXT,
+                    visit_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Table for blocked sites
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS firewall (
+                    id INTEGER PRIMARY KEY,
+                    domain TEXT UNIQUE NOT NULL,
+                    blocked_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Table for bookmarks
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS bookmarks (
+                    id INTEGER PRIMARY KEY,
+                    url TEXT UNIQUE NOT NULL,
+                    title TEXT,
+                    added_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Table for settings
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS settings (
+                    id INTEGER PRIMARY KEY,
+                    key TEXT UNIQUE NOT NULL,
+                    value TEXT
+                )
+            ''')
+            
+            if self.conn:
+                self.conn.commit()
+        except Exception as e:
+            print(f"Error creating tables: {e}")
+    
+    def add_visit(self, url, title):
+        if self.incognito or not self.cursor or not self.conn:
+            return False
+        
+        try:
+            # Get domain and IP
+            parsed_url = urlparse(url)
             domain = parsed_url.netloc
             
-            # Skip about:blank and empty URLs
-            if not domain or domain == "about:blank":
+            if not domain:
                 return False
-                
-            # Get IP address (if possible)
+            
             try:
                 ip_address = socket.gethostbyname(domain)
             except:
                 ip_address = "Unknown"
             
-            # In a real implementation, we would use a geolocation service
-            # For now, just set a placeholder
-            location = "Unknown"
-            
             # Add to database
             self.cursor.execute(
-                "INSERT INTO visits (url, title, ip_address, location) VALUES (?, ?, ?, ?)",
-                (url, title, ip_address, location)
+                "INSERT INTO visits (url, title, ip_address) VALUES (?, ?, ?)",
+                (url, title, ip_address)
             )
             self.conn.commit()
             return True
@@ -93,39 +128,47 @@ class DatabaseManager:
             print(f"Error recording visit: {e}")
             return False
     
-    def is_domain_blocked(self, url):
-        """Check if a domain is blocked by the firewall"""
+    def get_recent_visits(self, limit=20):
+        if self.incognito or not self.cursor:
+            return []
+        
         try:
-            parsed_url = urllib.parse.urlparse(url)
+            self.cursor.execute(
+                "SELECT url, title, ip_address, visit_time FROM visits ORDER BY visit_time DESC LIMIT ?",
+                (limit,)
+            )
+            return self.cursor.fetchall()
+        except Exception as e:
+            print(f"Error getting visits: {e}")
+            return []
+    
+    def is_domain_blocked(self, url):
+        try:
+            parsed_url = urlparse(url)
             domain = parsed_url.netloc
             
-            # Check domain against blocked list
-            for blocked_domain in self.blocked_domains:
-                if domain == blocked_domain or domain.endswith("." + blocked_domain):
+            for blocked in self.blocked_domains:
+                if domain == blocked or domain.endswith("." + blocked):
                     return True
             
             return False
         except:
             return False
     
-    def get_blocked_domains(self):
-        """Retrieve the list of blocked domains"""
-        try:
-            self.cursor.execute("SELECT domain FROM firewall")
-            return [row[0] for row in self.cursor.fetchall()]
-        except Exception as e:
-            print(f"Error retrieving blocked domains: {e}")
-            return []
-    
-    def block_domain(self, domain, reason="Manually blocked"):
-        """Add a domain to the blocklist"""
+    def block_domain(self, domain):
+        if self.incognito:
+            self.blocked_domains.append(domain)
+            return True
+            
+        if not self.cursor or not self.conn:
+            return False
+        
         try:
             self.cursor.execute(
-                "INSERT OR REPLACE INTO firewall (domain, reason) VALUES (?, ?)",
-                (domain, reason)
+                "INSERT OR REPLACE INTO firewall (domain) VALUES (?)",
+                (domain,)
             )
             self.conn.commit()
-            # Update the cached blocked domains
             self.blocked_domains = self.get_blocked_domains()
             return True
         except Exception as e:
@@ -133,341 +176,614 @@ class DatabaseManager:
             return False
     
     def unblock_domain(self, domain):
-        """Remove a domain from the blocklist"""
+        if self.incognito:
+            if domain in self.blocked_domains:
+                self.blocked_domains.remove(domain)
+            return True
+            
+        if not self.cursor or not self.conn:
+            return False
+        
         try:
             self.cursor.execute("DELETE FROM firewall WHERE domain = ?", (domain,))
             self.conn.commit()
-            # Update the cached blocked domains
             self.blocked_domains = self.get_blocked_domains()
             return True
         except Exception as e:
             print(f"Error unblocking domain: {e}")
             return False
     
-    def get_recent_visits(self, limit=20):
-        """Get recent website visits"""
+    def get_blocked_domains(self):
+        if self.incognito or not self.cursor:
+            return []
+        
         try:
-            self.cursor.execute(
-                "SELECT url, title, ip_address, location, visit_time FROM visits ORDER BY visit_time DESC LIMIT ?", 
-                (limit,)
-            )
-            return self.cursor.fetchall()
+            self.cursor.execute("SELECT domain FROM firewall")
+            return [row[0] for row in self.cursor.fetchall()]
         except Exception as e:
-            print(f"Error retrieving visits: {e}")
+            print(f"Error getting blocked domains: {e}")
             return []
     
+    def add_bookmark(self, url, title):
+        if self.incognito or not self.cursor or not self.conn:
+            return False
+        
+        try:
+            self.cursor.execute(
+                "INSERT OR REPLACE INTO bookmarks (url, title) VALUES (?, ?)",
+                (url, title)
+            )
+            self.conn.commit()
+            return True
+        except Exception as e:
+            print(f"Error adding bookmark: {e}")
+            return False
+    
+    def remove_bookmark(self, url):
+        if self.incognito or not self.cursor or not self.conn:
+            return False
+        
+        try:
+            self.cursor.execute("DELETE FROM bookmarks WHERE url = ?", (url,))
+            self.conn.commit()
+            return True
+        except Exception as e:
+            print(f"Error removing bookmark: {e}")
+            return False
+    
+    def get_bookmarks(self):
+        if self.incognito or not self.cursor:
+            return []
+        
+        try:
+            self.cursor.execute("SELECT url, title FROM bookmarks ORDER BY title")
+            return self.cursor.fetchall()
+        except Exception as e:
+            print(f"Error getting bookmarks: {e}")
+            return []
+    
+    def save_setting(self, key, value):
+        if self.incognito or not self.cursor or not self.conn:
+            return False
+        
+        try:
+            self.cursor.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                (key, value)
+            )
+            self.conn.commit()
+            return True
+        except Exception as e:
+            print(f"Error saving setting: {e}")
+            return False
+    
+    def get_setting(self, key, default=None):
+        if self.incognito or not self.cursor:
+            return default
+        
+        try:
+            self.cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+            result = self.cursor.fetchone()
+            return result[0] if result else default
+        except Exception as e:
+            print(f"Error getting setting: {e}")
+            return default
+    
     def close(self):
-        """Close the database connection"""
-        if self.conn:
+        if not self.incognito and self.conn:
             self.conn.close()
 
-
-class ConsoleBrowser:
-    """Simple console-based browser with website tracking and firewall"""
+class HTMLTextExtractor(HTMLParser):
+    """Extract readable text and links from HTML"""
     
     def __init__(self):
-        self.db_manager = DatabaseManager()
-        self.current_url = None
+        super().__init__()
+        self.result = []
+        self.links = []
+        self.current_link = None
+        self.skip_data = False
+        self.in_title = False
+        self.title = None
+        self.in_body = False
+        self.ignore_tags = ['script', 'style', 'meta', 'head', 'svg', 'path']
+    
+    def handle_starttag(self, tag, attrs):
+        # Skip content of ignored tags
+        if tag.lower() in self.ignore_tags:
+            self.skip_data = True
+            return
+        
+        # Track if we're in body (for better content extraction)
+        if tag.lower() == 'body':
+            self.in_body = True
+        
+        # Track title
+        if tag.lower() == 'title':
+            self.in_title = True
+        
+        # Extract links
+        if tag.lower() == 'a':
+            href = None
+            for attr in attrs:
+                if attr[0].lower() == 'href':
+                    href = attr[1]
+                    break
+            
+            if href:
+                link_id = len(self.links) + 1
+                self.links.append((link_id, href))
+                self.current_link = link_id
+                self.result.append(f"\033[34m[{link_id}]\033[0m ")  # Blue link indicators
+    
+    def handle_endtag(self, tag):
+        if tag.lower() in self.ignore_tags:
+            self.skip_data = False
+        
+        if tag.lower() == 'a':
+            self.current_link = None
+        
+        if tag.lower() == 'title':
+            self.in_title = False
+        
+        # Add line breaks for block elements
+        if tag.lower() in ['p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li']:
+            self.result.append('\n')
+        
+        if tag.lower() in ['br']:
+            self.result.append('\n')
+    
+    def handle_data(self, data):
+        if self.skip_data:
+            return
+        
+        # Track title
+        if self.in_title and not self.title:
+            self.title = data.strip()
+        
+        # Only process non-empty data
+        text = data.strip()
+        if text:
+            self.result.append(text)
+
+class ConsoleBrowser:
+    def __init__(self):
         self.history = []
-        self.history_position = -1
-        self.show_welcome()
+        self.current_index = -1
+        self.default_url = "https://www.google.com"
+        self.incognito_mode = False
+        self.dark_mode = False
+        self.db_manager = DatabaseManager(incognito=self.incognito_mode)
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        self.should_exit = False
+        self.load_settings()
+        self.current_content = None
+        self.current_parser = None
+        self.current_title = None
+        self.current_url = None
     
-    def show_welcome(self):
-        """Display welcome message with instructions"""
-        print("\n" + "="*60)
-        print(" CONSOLE WEB BROWSER WITH TRACKING & FIREWALL ".center(60, "="))
-        print("="*60)
-        print("\nCommands:")
-        print("  open [url]      - Navigate to a URL")
-        print("  back            - Go back in history")
-        print("  forward         - Go forward in history")
-        print("  history         - Show browsing history")
-        print("  block [domain]  - Block a domain")
-        print("  unblock [domain]- Unblock a domain")
-        print("  blocklist       - Show blocked domains")
-        print("  visits          - Show visit history with IPs")
-        print("  exit/quit       - Exit the browser")
-        print("\nDefault search is Google")
-        print("="*60 + "\n")
+    def load_settings(self):
+        """Load saved settings"""
+        # Dark mode
+        self.dark_mode = self.db_manager.get_setting("dark_mode", "0") == "1"
+        
+        # Apply dark mode if enabled
+        if self.dark_mode:
+            os.system('color 0F' if os.name == 'nt' else '')
     
-    def navigate_to_url(self, url):
-        """Navigate to the specified URL and track the visit"""
-        # Prepare URL
+    def fetch_url(self, url):
+        """Fetch content from a URL"""
+        # Handle search queries
+        if ' ' in url and '.' not in url:
+            search_term = quote_plus(url)
+            url = f"https://www.google.com/search?q={search_term}"
+        
+        # Make sure URL has a scheme
         if not url.startswith(('http://', 'https://')):
-            if ' ' in url or '.' not in url:  # Likely a search query
-                url = f"https://www.google.com/search?q={urllib.parse.quote(url)}"
-            else:
-                url = 'http://' + url
+            url = 'https://' + url
         
-        # Check if domain is blocked
+        # Check if blocked
         if self.db_manager.is_domain_blocked(url):
-            print(f"\n❌ Access Blocked: Domain in the URL is blocked by firewall settings")
-            return
-        
-        # Display information about connection
-        parsed_url = urllib.parse.urlparse(url)
-        domain = parsed_url.netloc
+            print("\033[91mThis website is blocked by your firewall settings.\033[0m")
+            return None, None
         
         try:
-            ip_address = socket.gethostbyname(domain)
-            print(f"\nConnecting to: {domain} ({ip_address})")
-        except socket.gaierror:
-            print(f"\nCould not resolve domain: {domain}")
-            return
-        
-        # Attempt to fetch the URL
-        try:
-            print(f"Loading {url}...")
-            response = urllib.request.urlopen(url, timeout=10)
+            # Fetch content using urllib (more reliable)
+            req = urllib.request.Request(url, headers=self.headers)
+            with urllib.request.urlopen(req, timeout=10) as response:
+                content = response.read().decode('utf-8', errors='ignore')
+                final_url = response.geturl()
             
-            content_type = response.getheader('Content-Type', 'unknown')
-            encoding = 'utf-8'
+            # Add to history
+            if self.current_index < len(self.history) - 1:
+                self.history = self.history[:self.current_index + 1]
+                
+            self.history.append(final_url)
+            self.current_index = len(self.history) - 1
             
-            # Extract encoding if specified
-            if 'charset=' in content_type:
-                encoding = content_type.split('charset=')[1].split(';')[0]
+            # Parse content
+            parser = HTMLTextExtractor()
+            parser.feed(content)
             
-            # If it's HTML, display simplified content
-            if 'text/html' in content_type:
-                html_content = response.read().decode(encoding, errors='replace')
-                
-                # Extract title
-                title_match = re.search('<title>(.*?)</title>', html_content, re.IGNORECASE | re.DOTALL)
-                title = title_match.group(1) if title_match else "No title"
-                title = html.unescape(title.strip())
-                
-                # Save to history
-                if self.history_position < len(self.history) - 1:
-                    # If we navigated from a back state, truncate forward history
-                    self.history = self.history[:self.history_position + 1]
-                
-                self.history.append(url)
-                self.history_position = len(self.history) - 1
-                self.current_url = url
-                
-                # Record visit with IP address
-                self.db_manager.add_visit(url, title)
-                
-                # Display page info
-                print("\n" + "="*60)
-                print(f"URL: {url}")
-                print(f"Title: {title}")
-                print(f"Server IP: {ip_address}")
-                print("="*60)
-                
-                # Extract and display links
-                links = re.findall('<a\\s+href="([^"]+)"[^>]*>([^<]+)</a>', html_content)
-                if links:
-                    print("\nLinks on page:")
-                    shown_links = 0
-                    for i, (link_url, link_text) in enumerate(links[:10], 1):
-                        # Make relative links absolute
-                        if link_url.startswith('/'):
-                            base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
-                            link_url = base_url + link_url
-                        elif not link_url.startswith(('http://', 'https://')):
-                            if self.current_url:
-                                link_url = urllib.parse.urljoin(self.current_url, link_url)
-                        
-                        print(f"  {i}. {link_text.strip()}: {link_url}")
-                        shown_links += 1
-                        if shown_links >= 10:
-                            break
-                    
-                    if len(links) > 10:
-                        print(f"  ... and {len(links) - 10} more links")
-                
-            else:
-                print(f"\nContent type is {content_type}, not displaying content")
-                print(f"URL: {url}")
-                print(f"Server IP: {ip_address}")
-                
-                # Record visit
-                self.db_manager.add_visit(url, "Binary or non-HTML content")
-                
-                # Save to history
-                if self.history_position < len(self.history) - 1:
-                    self.history = self.history[:self.history_position + 1]
-                
-                self.history.append(url)
-                self.history_position = len(self.history) - 1
-                self.current_url = url
+            # Store current page data
+            self.current_content = content
+            self.current_parser = parser
+            self.current_title = parser.title or urlparse(url).netloc
+            self.current_url = final_url
             
-        except HTTPError as e:
-            print(f"HTTP Error: {e.code} - {e.reason}")
-            # Still record the visit with the error
-            self.db_manager.add_visit(url, f"Error: {e.code}")
-        
-        except URLError as e:
-            print(f"URL Error: {e.reason}")
-        
+            # Add visit to database if not in incognito mode
+            if not self.incognito_mode:
+                self.db_manager.add_visit(final_url, parser.title or "")
+            
+            # Get domain info
+            parsed_url = urlparse(final_url)
+            domain = parsed_url.netloc
+            
+            try:
+                ip_address = socket.gethostbyname(domain)
+                print(f"\033[90mConnected to: {domain} ({ip_address})\033[0m")
+            except:
+                print(f"\033[90mConnected to: {domain}\033[0m")
+            
+            return parser, content
         except Exception as e:
-            print(f"Error: {str(e)}")
+            print(f"\033[91mError loading page: {e}\033[0m")
+            return None, None
+    
+    def extract_search_results(self, html_content, url):
+        """Extract and display search results from major search engines"""
+        if 'google.com/search' in url:
+            # Extract Google search results
+            results = []
+            
+            # Pattern for Google search results
+            result_blocks = re.findall(r'<div class="g">(.*?)</div>\s*</div>\s*</div>', html_content, re.DOTALL)
+            if not result_blocks:
+                result_blocks = re.findall(r'<div class="tF2Cxc">(.*?)</div>\s*</div>', html_content, re.DOTALL)
+            
+            for i, block in enumerate(result_blocks[:10], 1):
+                # Extract title
+                title_match = re.search(r'<h3[^>]*>(.*?)</h3>', block, re.DOTALL)
+                title = "No title" if not title_match else re.sub(r'<.*?>', '', title_match.group(1))
+                
+                # Extract URL
+                url_match = re.search(r'<a href="([^"]+)"', block)
+                url = "#" if not url_match else url_match.group(1)
+                if url.startswith('/url?'):
+                    url_param = re.search(r'url=([^&]+)', url)
+                    if url_param:
+                        url = url_param.group(1)
+                
+                # Extract snippet
+                snippet_match = re.search(r'<div class="[^"]*?"[^>]*?>(.*?)</div>', block, re.DOTALL)
+                snippet = "" if not snippet_match else re.sub(r'<.*?>', '', snippet_match.group(1))
+                
+                results.append({
+                    'id': i,
+                    'title': title,
+                    'url': url,
+                    'snippet': snippet
+                })
+            
+            # Display results
+            print("\n\033[1;32m=== Google Search Results ===\033[0m\n")
+            for result in results:
+                print(f"\033[1;34m[{result['id']}] {result['title']}\033[0m")
+                print(f"\033[90m{result['url']}\033[0m")
+                print(f"{result['snippet']}\n")
+            
+            # Store links for selection
+            self.current_parser = HTMLTextExtractor()
+            self.current_parser.links = [(r['id'], r['url']) for r in results]
+            
+            return True
+        
+        return False
+    
+    def render_page(self, parser, content, url):
+        """Render page content in console"""
+        # Check if this is a search results page
+        if self.extract_search_results(content, url):
+            return
+        
+        # If not a search page, display the parsed content
+        if parser and parser.title:
+            print(f"\n\033[1;32m=== {parser.title} ===\033[0m\n")
+        
+        # Display the content
+        print(''.join(parser.result))
+        
+        # Show available links
+        if parser.links:
+            print("\n\033[1;33m=== Available Links ===\033[0m")
+            for link_id, link_url in parser.links:
+                # Truncate very long URLs
+                display_url = link_url[:70] + "..." if len(link_url) > 70 else link_url
+                print(f"\033[34m[{link_id}]\033[0m {display_url}")
     
     def go_back(self):
-        """Navigate back in history"""
-        if self.history_position > 0:
-            self.history_position -= 1
-            print(f"Going back to: {self.history[self.history_position]}")
-            # We don't call navigate_to_url to avoid adding duplicate history entries
-            self.current_url = self.history[self.history_position]
-            print(f"Current URL: {self.current_url}")
+        """Go back in history"""
+        if self.current_index > 0:
+            self.current_index -= 1
+            url = self.history[self.current_index]
+            parser, content = self.fetch_url(url)
+            if parser and content:
+                self.render_page(parser, content, url)
         else:
-            print("No previous page in history")
+            print("\033[91mCan't go back any further.\033[0m")
     
     def go_forward(self):
-        """Navigate forward in history"""
-        if self.history_position < len(self.history) - 1:
-            self.history_position += 1
-            print(f"Going forward to: {self.history[self.history_position]}")
-            self.current_url = self.history[self.history_position]
-            print(f"Current URL: {self.current_url}")
+        """Go forward in history"""
+        if self.current_index < len(self.history) - 1:
+            self.current_index += 1
+            url = self.history[self.current_index]
+            parser, content = self.fetch_url(url)
+            if parser and content:
+                self.render_page(parser, content, url)
         else:
-            print("No next page in history")
+            print("\033[91mCan't go forward any further.\033[0m")
+    
+    def add_bookmark(self):
+        """Add current page to bookmarks"""
+        if not self.current_url or not self.current_title:
+            print("\033[91mNo page to bookmark.\033[0m")
+            return
+        
+        if self.db_manager.add_bookmark(self.current_url, self.current_title):
+            print(f"\033[92mBookmark added: {self.current_title}\033[0m")
+        else:
+            print("\033[91mFailed to add bookmark.\033[0m")
+    
+    def show_bookmarks(self):
+        """Show all bookmarks"""
+        bookmarks = self.db_manager.get_bookmarks()
+        
+        if not bookmarks:
+            print("\033[91mNo bookmarks found.\033[0m")
+            return
+        
+        print("\n\033[1;32m=== Bookmarks ===\033[0m\n")
+        for i, bookmark in enumerate(bookmarks, 1):
+            title = bookmark['title'] or bookmark['url']
+            print(f"\033[34m[{i}]\033[0m {title}")
+            print(f"\033[90m    {bookmark['url']}\033[0m")
+        
+        # Allow selection
+        try:
+            choice = input("\nEnter number to open bookmark (or press Enter to cancel): ")
+            if choice.strip() and choice.isdigit():
+                index = int(choice) - 1
+                if 0 <= index < len(bookmarks):
+                    url = bookmarks[index]['url']
+                    parser, content = self.fetch_url(url)
+                    if parser and content:
+                        self.render_page(parser, content, url)
+        except (ValueError, IndexError):
+            print("\033[91mInvalid selection.\033[0m")
     
     def show_history(self):
-        """Display browsing history"""
-        if not self.history:
-            print("No browsing history")
-            return
-        
-        print("\n--- Browsing History ---")
-        for i, url in enumerate(self.history):
-            marker = " ➤" if i == self.history_position else ""
-            print(f"{i+1}. {url}{marker}")
-    
-    def block_domain(self, domain):
-        """Add a domain to the firewall blocklist"""
-        if not domain:
-            print("Please specify a domain to block")
-            return
-        
-        # Clean up the domain
-        if domain.startswith(('http://', 'https://')):
-            parsed = urllib.parse.urlparse(domain)
-            domain = parsed.netloc
-        
-        if not domain:
-            print("Invalid domain format")
-            return
-        
-        if self.db_manager.block_domain(domain):
-            print(f"Domain '{domain}' has been blocked")
-        else:
-            print(f"Failed to block domain '{domain}'")
-    
-    def unblock_domain(self, domain):
-        """Remove a domain from the firewall blocklist"""
-        if not domain:
-            print("Please specify a domain to unblock")
-            return
-        
-        # Clean up the domain
-        if domain.startswith(('http://', 'https://')):
-            parsed = urllib.parse.urlparse(domain)
-            domain = parsed.netloc
-        
-        if not domain:
-            print("Invalid domain format")
-            return
-        
-        if self.db_manager.unblock_domain(domain):
-            print(f"Domain '{domain}' has been unblocked")
-        else:
-            print(f"Failed to unblock domain '{domain}' or domain not in blocklist")
-    
-    def show_blocklist(self):
-        """Display the list of blocked domains"""
-        domains = self.db_manager.get_blocked_domains()
-        if not domains:
-            print("No domains are currently blocked")
-            return
-        
-        print("\n--- Blocked Domains ---")
-        for i, domain in enumerate(domains, 1):
-            print(f"{i}. {domain}")
-    
-    def show_visits(self):
-        """Display the history of visited sites with their details"""
+        """Show browsing history"""
         visits = self.db_manager.get_recent_visits()
+        
         if not visits:
-            print("No visit history available")
+            print("\033[91mNo history found.\033[0m")
             return
         
-        print("\n--- Recent Website Visits ---")
+        print("\n\033[1;32m=== Recent History ===\033[0m\n")
         for i, visit in enumerate(visits, 1):
-            title = visit['title'] or 'No title'
-            url = visit['url']
-            ip = visit['ip_address']
-            location = visit['location']
-            timestamp = visit['visit_time']
-            
-            print(f"{i}. {title}")
-            print(f"   URL: {url}")
-            print(f"   IP Address: {ip}")
-            print(f"   Location: {location}")
-            print(f"   Time: {timestamp}")
-            print("")
+            title = visit['title'] or visit['url']
+            print(f"\033[34m[{i}]\033[0m {title}")
+            print(f"\033[90m    {visit['url']} - IP: {visit['ip_address']} - {visit['visit_time']}\033[0m")
+        
+        # Allow selection
+        try:
+            choice = input("\nEnter number to open page (or press Enter to cancel): ")
+            if choice.strip() and choice.isdigit():
+                index = int(choice) - 1
+                if 0 <= index < len(visits):
+                    url = visits[index]['url']
+                    parser, content = self.fetch_url(url)
+                    if parser and content:
+                        self.render_page(parser, content, url)
+        except (ValueError, IndexError):
+            print("\033[91mInvalid selection.\033[0m")
     
-    def run(self):
-        """Main browser loop"""
-        running = True
-        while running:
-            try:
-                command = input("\nbrowser> ").strip()
+    def toggle_dark_mode(self):
+        """Toggle dark mode"""
+        self.dark_mode = not self.dark_mode
+        self.db_manager.save_setting("dark_mode", "1" if self.dark_mode else "0")
+        
+        if self.dark_mode:
+            print("\033[92mDark mode enabled.\033[0m")
+            if os.name == 'nt':
+                os.system('color 0F')
+        else:
+            print("\033[92mLight mode enabled.\033[0m")
+            if os.name == 'nt':
+                os.system('color F0')
+    
+    def show_firewall(self):
+        """Show and manage firewall settings"""
+        domains = self.db_manager.get_blocked_domains()
+        
+        print("\n\033[1;32m=== Firewall Settings ===\033[0m\n")
+        
+        if domains:
+            print("Blocked domains:")
+            for i, domain in enumerate(domains, 1):
+                print(f"\033[34m[{i}]\033[0m {domain}")
+        else:
+            print("No domains are currently blocked.")
+        
+        print("\nFirewall Options:")
+        print("[b] Block a new domain")
+        print("[u] Unblock a domain")
+        print("[x] Return to browser")
+        
+        choice = input("\nEnter option: ").lower()
+        
+        if choice == 'b':
+            domain = input("Enter domain to block (e.g., example.com): ").strip()
+            if domain:
+                # Format domain
+                if "://" in domain:
+                    parsed = urlparse(domain)
+                    domain = parsed.netloc
                 
-                if not command:
-                    continue
-                
-                parts = command.split(maxsplit=1)
-                cmd = parts[0].lower()
-                arg = parts[1] if len(parts) > 1 else ""
-                
-                if cmd in ["exit", "quit"]:
-                    running = False
-                
-                elif cmd == "open":
-                    if arg:
-                        self.navigate_to_url(arg)
+                if domain:
+                    if self.db_manager.block_domain(domain):
+                        print(f"\033[92mDomain '{domain}' has been blocked.\033[0m")
                     else:
-                        print("Please provide a URL to open")
-                
-                elif cmd == "back":
-                    self.go_back()
-                
-                elif cmd == "forward":
-                    self.go_forward()
-                
-                elif cmd == "history":
-                    self.show_history()
-                
-                elif cmd == "block":
-                    self.block_domain(arg)
-                
-                elif cmd == "unblock":
-                    self.unblock_domain(arg)
-                
-                elif cmd == "blocklist":
-                    self.show_blocklist()
-                
-                elif cmd == "visits":
-                    self.show_visits()
-                
+                        print("\033[91mFailed to block domain.\033[0m")
                 else:
-                    print(f"Unknown command: {cmd}")
-                    print("Type 'open [url]' to navigate, or 'exit' to quit")
+                    print("\033[91mInvalid domain.\033[0m")
+        
+        elif choice == 'u':
+            if domains:
+                domain_num = input("Enter number of domain to unblock: ")
+                if domain_num.isdigit():
+                    index = int(domain_num) - 1
+                    if 0 <= index < len(domains):
+                        domain = domains[index]
+                        if self.db_manager.unblock_domain(domain):
+                            print(f"\033[92mDomain '{domain}' has been unblocked.\033[0m")
+                        else:
+                            print("\033[91mFailed to unblock domain.\033[0m")
+                    else:
+                        print("\033[91mInvalid selection.\033[0m")
+                else:
+                    print("\033[91mInvalid input.\033[0m")
+            else:
+                print("\033[91mNo domains to unblock.\033[0m")
+    
+    def open_in_default_browser(self):
+        """Open current URL in system's default browser"""
+        if not self.current_url:
+            print("\033[91mNo URL to open.\033[0m")
+            return
+        
+        try:
+            webbrowser.open(self.current_url)
+            print(f"\033[92mOpened in default browser: {self.current_url}\033[0m")
+        except Exception as e:
+            print(f"\033[91mError opening browser: {e}\033[0m")
+    
+    def toggle_incognito(self):
+        """Toggle incognito mode"""
+        self.incognito_mode = not self.incognito_mode
+        self.db_manager = DatabaseManager(incognito=self.incognito_mode)
+        
+        if self.incognito_mode:
+            print("\033[92mIncognito mode enabled. Your browsing history will not be saved.\033[0m")
+        else:
+            print("\033[92mNormal browsing mode. Your browsing history will be saved.\033[0m")
+    
+    def show_help(self):
+        """Show help information"""
+        print("\n\033[1;32m=== Browser Help ===\033[0m\n")
+        print("Enter a URL or search terms to browse.")
+        print("\nCommands:")
+        print("  [number]   : Follow link with that number")
+        print("  back       : Go back in history")
+        print("  forward    : Go forward in history")
+        print("  refresh    : Reload current page")
+        print("  bookmark   : Add current page to bookmarks")
+        print("  bookmarks  : Show all bookmarks")
+        print("  history    : Show browsing history")
+        print("  firewall   : Manage firewall settings")
+        print("  dark       : Toggle dark mode")
+        print("  incognito  : Toggle incognito mode")
+        print("  open       : Open current page in default browser")
+        print("  help       : Show this help")
+        print("  exit/quit  : Exit browser")
+    
+    def main_loop(self):
+        """Main browser loop"""
+        print("\n\033[1;32m=== Console Web Browser ===\033[0m")
+        print("Type 'help' for commands or enter a URL to begin.\n")
+        
+        # Start with Google
+        parser, content = self.fetch_url(self.default_url)
+        if parser and content:
+            self.render_page(parser, content, self.default_url)
+        
+        # Main loop
+        while not self.should_exit:
+            print("\n\033[1;36m" + ("🕵️ " if self.incognito_mode else "") + "Enter URL, search, or command:\033[0m", end=" ")
+            command = input().strip()
             
-            except KeyboardInterrupt:
-                print("\nKeyboard interrupt received. Type 'exit' to quit.")
+            if not command:
+                continue
             
-            except Exception as e:
-                print(f"Error: {str(e)}")
+            # Handle commands
+            if command.lower() in ['exit', 'quit']:
+                self.should_exit = True
+            
+            elif command.lower() == 'help':
+                self.show_help()
+            
+            elif command.lower() == 'back':
+                self.go_back()
+            
+            elif command.lower() == 'forward':
+                self.go_forward()
+            
+            elif command.lower() == 'refresh' and self.current_url:
+                parser, content = self.fetch_url(self.current_url)
+                if parser and content:
+                    self.render_page(parser, content, self.current_url)
+            
+            elif command.lower() == 'bookmark':
+                self.add_bookmark()
+            
+            elif command.lower() == 'bookmarks':
+                self.show_bookmarks()
+            
+            elif command.lower() == 'history':
+                self.show_history()
+            
+            elif command.lower() == 'dark':
+                self.toggle_dark_mode()
+            
+            elif command.lower() == 'incognito':
+                self.toggle_incognito()
+            
+            elif command.lower() == 'firewall':
+                self.show_firewall()
+            
+            elif command.lower() == 'open':
+                self.open_in_default_browser()
+            
+            elif command.isdigit() and self.current_parser:
+                # Follow a link
+                link_id = int(command)
+                for id, url in self.current_parser.links:
+                    if id == link_id:
+                        parser, content = self.fetch_url(url)
+                        if parser and content:
+                            self.render_page(parser, content, url)
+                        break
+                else:
+                    print(f"\033[91mNo link with ID {link_id}.\033[0m")
+            
+            else:
+                # Treat as URL or search term
+                parser, content = self.fetch_url(command)
+                if parser and content:
+                    self.render_page(parser, content, command)
         
         # Clean up
         self.db_manager.close()
-        print("Browser closed. Goodbye!")
-
+        print("\n\033[1;32mThank you for using Console Web Browser!\033[0m")
 
 if __name__ == "__main__":
     browser = ConsoleBrowser()
-    browser.run()
+    try:
+        browser.main_loop()
+    except KeyboardInterrupt:
+        print("\n\033[1;32mExiting browser...\033[0m")
+        browser.db_manager.close()
+    except Exception as e:
+        print(f"\n\033[91mAn error occurred: {e}\033[0m")
+        browser.db_manager.close()
