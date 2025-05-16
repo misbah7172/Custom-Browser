@@ -260,9 +260,10 @@ class AddressBar(QLineEdit):
         self.returnPressed.connect(self.navigate_to_url)
         
         # Set initial size policy
+        from PyQt6.QtWidgets import QSizePolicy
         self.setSizePolicy(
-            QLineEdit.SizePolicy.Expanding,
-            QLineEdit.SizePolicy.Fixed
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Fixed
         )
         self.setMinimumHeight(30)
     
