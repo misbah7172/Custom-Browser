@@ -125,8 +125,13 @@ class VisitHistoryDialog(QDialog):
         visits = self.db_manager.get_recent_visits()
         
         for visit in visits:
-            url, title, ip, location, timestamp = visit
-            display_text = f"{title or url} - {ip} - {location} - {timestamp}"
+            url = visit['url']
+            title = visit['title'] or url
+            ip = visit['ip_address']
+            location = visit['location']
+            timestamp = visit['visit_time']
+            
+            display_text = f"{title} - {ip} - {location} - {timestamp}"
             item = QListWidgetItem(display_text)
             item.setToolTip(url)
             self.visit_list.addItem(item)

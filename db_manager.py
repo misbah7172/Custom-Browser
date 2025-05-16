@@ -24,6 +24,7 @@ class DatabaseManager:
     def connect(self):
         """Connect to the SQLite database"""
         self.conn = sqlite3.connect(self.db_path)
+        self.conn.row_factory = sqlite3.Row
         self.cursor = self.conn.cursor()
     
     def create_tables(self):
@@ -104,7 +105,8 @@ class DatabaseManager:
         try:
             self.cursor.execute("SELECT domain FROM firewall")
             return [row[0] for row in self.cursor.fetchall()]
-        except:
+        except Exception as e:
+            print(f"Error retrieving blocked domains: {e}")
             return []
     
     def block_domain(self, domain, reason="Manually blocked"):

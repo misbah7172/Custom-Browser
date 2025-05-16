@@ -1,10 +1,10 @@
 from PyQt6.QtCore import QUrl, Qt, QSize
 from PyQt6.QtWidgets import (
     QMainWindow, QVBoxLayout, QHBoxLayout, 
-    QWidget, QMessageBox, QTabWidget, QMenuBar, QMenu, QAction,
+    QWidget, QMessageBox, QTabWidget, QMenuBar, QMenu,
     QStatusBar
 )
-from PyQt6.QtGui import QIcon, QKeySequence, QShortcut
+from PyQt6.QtGui import QIcon, QKeySequence, QShortcut, QAction
 from PyQt6.QtWebEngineCore import QWebEnginePage
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
