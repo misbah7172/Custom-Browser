@@ -19,6 +19,10 @@ args = "PyQtBrowser"
 task = "workflow.run"
 args = "browser_app"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "ConsoleBrowser"
+
 [[workflows.workflow]]
 name = "PyQtBrowser"
 author = "agent"
@@ -35,6 +39,14 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python main.py"
+
+[[workflows.workflow]]
+name = "ConsoleBrowser"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python browser_cli.py"
 
 [deployment]
 run = ["sh", "-c", "pip install PyQt6 PyQt6-WebEngine && python main.py"]
