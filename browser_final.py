@@ -84,7 +84,7 @@ class BrowserTab(QWidget):
                     
                     # Store in database
                     if hasattr(self.browser, 'db_manager'):
-                        self.browser.db_manager.add_visit(url_str, domain, ip_address)
+                        self.browser.db_manager.add_visit(url_str, domain)
                     
                     # Show basic content
                     self.content.setPlainText(
