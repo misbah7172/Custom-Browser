@@ -1,0 +1,230 @@
+mighty@kali] - [~] - [Fri May 16, 22:56]
+└─[$] <> source myenv/bin/activate
+(myenv) ┌─[mighty@kali] - [~] - [Fri May 16, 22:56]
+└─[$] <> cd Code\ Stack  
+(myenv) ┌─[mighty@kali] - [~/Code Stack] - [Fri May 16, 22:56]
+└─[$] <> cd ModernBrowser 
+(myenv) ┌─[mighty@kali] - [~/Code Stack/ModernBrowser] - [Fri May 16, 22:56]
+└─[$] <git:(main*)> pip install PyQt6-WebEngine
+Requirement already satisfied: PyQt6-WebEngine in /home/mighty/myenv/lib/python3.13/site-packages (6.9.0)
+Requirement already satisfied: PyQt6-sip<14,>=13.8 in /home/mighty/myenv/lib/python3.13/site-packages (from PyQt6-WebEngine) (13.10.0)
+Requirement already satisfied: PyQt6-WebEngine-Qt6<6.10.0,>=6.9.0 in /home/mighty/myenv/lib/python3.13/site-packages (from PyQt6-WebEngine) (6.9.0)
+Requirement already satisfied: PyQt6>=6.2.0 in /home/mighty/myenv/lib/python3.13/site-packages (from PyQt6-WebEngine) (6.9.0)
+Requirement already satisfied: PyQt6-Qt6<6.10.0,>=6.9.0 in /home/mighty/myenv/lib/python3.13/site-packages (from PyQt6>=6.2.0->PyQt6-WebEngine) (6.9.0)
+(myenv) ┌─[mighty@kali] - [~/Code Stack/ModernBrowser] - [Fri May 16, 22:56]                                                                    
+└─[$] <git:(main*)> sudo apt-get install python3-pyqt6.qtwebengine
+[sudo] password for mighty: 
+Reading package lists... Done
+Building dependency tree... Done
+Reading state information... Done
+Solving dependencies... Done
+The following packages were automatically installed and are no longer required:
+  gdb-minimal hwdata kde-config-sddm kdoctools5 libgrantlee-templates5
+  libicu72:i386 libkdecorations2private11 libkf5js5 libkf5khtml-bin
+  libkf5khtml-data libkf5khtml5 libkf6dbusaddons-bin liblbfgsb0
+  libopencv-calib3d406t64 libopencv-contrib406t64 libopencv-core406t64
+  libopencv-dnn406t64 libopencv-features2d406t64 libopencv-flann406t64
+  libopencv-highgui406t64 libopencv-imgcodecs406t64
+  libopencv-imgproc406t64 libopencv-ml406t64 libopencv-objdetect406t64
+  libopencv-photo406t64 libopencv-shape406t64
+  libopencv-stitching406t64 libopencv-video406t64
+  libopencv-videoio406t64 libopencv-viz406t64 libphonon4qt5-4t64
+  libpython3.12t64 libtinyxml2-10 linux-image-6.11.2-amd64 phonon4qt5
+  phonon4qt5-backend-vlc plasma-browser-integration python3.12-tk
+  strongswan
+Use 'sudo apt autoremove' to remove them.
+The following additional packages will be installed:
+  breeze breeze-cursor-theme breeze-wallpaper dolphin gwenview kate
+  kde-cli-tools kde-cli-tools-data kde-config-screenlocker
+  kde-spectacle kde-style-breeze kde-style-breeze-data
+  kde-style-breeze-qt5 kde-style-oxygen-qt6 kdeconnect kinfocenter
+  kio6 kscreen kwayland6-data kwin-common kwin-data kwin-style-breeze
+  kwin-style-kali kwin-wayland kwin-x11 layer-shell-qt
+  libbatterycontrol6 libdisplay-info-bin libdolphinvcs6
+  libkdecorations3-6 libkdecorations3private2 libkf6colorscheme6
+  libkf6configwidgets6 libkf6dbusaddons6 libkf6globalaccel6
+  libkf6iconthemes6 libkf6jobwidgets6 libkf6kiowidgets6 libkf6screen8
+  libkf6screendpms8 libkf6windowsystem6 libkf6xmlgui6 libkfontinstui6
+  libkglobalacceld0 libkirigami6 libkirigamidelegates6
+  libkirigamiplatform6 libklipper6 libkmpris6 libkscreen-bin
+  libkscreen-data libkscreenlocker6 libksysguard-data
+  libksysguardformatter2 libksysguardsensorfaces2 libksysguardsensors2
+  libksysguardsystemstats2 libkwaylandclient6 libkwin6
+  libkworkspace6-6 liblayershellqtinterface6 libnotificationmanager1
+  libokular6core3 liboxygenstyle6-6 liboxygenstyleconfig6-6
+  libplasma-geolocation-interface6 libplasma5support-data
+  libplasma5support6 libplasma6 libplasmaactivities6
+  libplasmaactivitiesstats1 libplasmaquick6 libpowerdevilcore2
+  libprocesscore10 libqt6core5compat6 libqt6core6t64 libqt6dbus6
+  libqt6gui6 libqt6labsplatform6 libqt6multimedia6 libqt6network6
+  libqt6opengl6 libqt6openglwidgets6 libqt6positioning6
+  libqt6positioning6-plugins libqt6positioningquick6
+  libqt6printsupport6 libqt6qml6 libqt6qmlmeta6 libqt6qmlmodels6
+  libqt6qmlworkerscript6 libqt6quick6 libqt6quickcontrols2-6
+  libqt6quickshapes6 libqt6quicktemplates2-6 libqt6quickwidgets6
+  libqt6sensors6 libqt6serialport6 libqt6shadertools6 libqt6sql6
+  libqt6sql6-sqlite libqt6svg6 libqt6svgwidgets6 libqt6test6
+  libqt6texttospeech6 libqt6virtualkeyboard6 libqt6waylandclient6
+  libqt6waylandcompositor6 libqt6webchannel6 libqt6webchannelquick6
+  libqt6webengine6-data libqt6webenginecore6 libqt6webenginecore6-bin
+  libqt6webenginequick6 libqt6webenginewidgets6 libqt6webview6
+  libqt6widgets6 libqt6wlshellintegration6 libqt6xml6 libtaskmanager6
+  okular plasma-desktop plasma-desktop-data plasma-integration
+  plasma-workspace powerdevil powerdevil-data python3-pyqt6
+  python3-pyqt6.qtqml python3-pyqt6.qtwebchannel
+  qml6-module-org-kde-activities qml6-module-org-kde-desktop
+  qml6-module-org-kde-kirigami
+  qml6-module-org-kde-plasma-plasma5support
+  qml6-module-qt-labs-platform qml6-module-qt-labs-qmlmodels
+  qml6-module-qt5compat-graphicaleffects qml6-module-qtmultimedia
+  qml6-module-qtpositioning qml6-module-qtquick
+  qml6-module-qtquick-controls qml6-module-qtquick-dialogs
+  qml6-module-qtquick-effects qml6-module-qtquick-layouts
+  qml6-module-qtquick-particles qml6-module-qtquick-templates
+  qml6-module-qtquick-virtualkeyboard qml6-module-qtwebengine
+  qml6-module-qtwebview qt6-base-dev-tools qt6-gtk-platformtheme
+  qt6-qpa-plugins qt6-svg-plugins qt6-virtualkeyboard-plugin
+  qt6-wayland qt6ct xdg-desktop-portal-kde xwaylandvideobridge
+The following packages will be REMOVED:
+  libkdecorations2-6
+The following NEW packages will be installed:
+  libdisplay-info-bin libkdecorations3-6 libkdecorations3private2
+  libqt6labsplatform6 libqt6qmlmeta6 python3-pyqt6.qtqml
+  python3-pyqt6.qtwebchannel python3-pyqt6.qtwebengine
+The following packages will be upgraded:
+  breeze breeze-cursor-theme breeze-wallpaper dolphin gwenview kate
+  kde-cli-tools kde-cli-tools-data kde-config-screenlocker
+  kde-spectacle kde-style-breeze kde-style-breeze-data
+  kde-style-breeze-qt5 kde-style-oxygen-qt6 kdeconnect kinfocenter
+  kio6 kscreen kwayland6-data kwin-common kwin-data kwin-style-breeze
+  kwin-style-kali kwin-wayland kwin-x11 layer-shell-qt
+  libbatterycontrol6 libdolphinvcs6 libkf6colorscheme6
+  libkf6configwidgets6 libkf6dbusaddons6 libkf6globalaccel6
+  libkf6iconthemes6 libkf6jobwidgets6 libkf6kiowidgets6 libkf6screen8
+  libkf6screendpms8 libkf6windowsystem6 libkf6xmlgui6 libkfontinstui6
+  libkglobalacceld0 libkirigami6 libkirigamidelegates6
+  libkirigamiplatform6 libklipper6 libkmpris6 libkscreen-bin
+  libkscreen-data libkscreenlocker6 libksysguard-data
+  libksysguardformatter2 libksysguardsensorfaces2 libksysguardsensors2
+  libksysguardsystemstats2 libkwaylandclient6 libkwin6
+  libkworkspace6-6 liblayershellqtinterface6 libnotificationmanager1
+  libokular6core3 liboxygenstyle6-6 liboxygenstyleconfig6-6
+  libplasma-geolocation-interface6 libplasma5support-data
+  libplasma5support6 libplasma6 libplasmaactivities6
+  libplasmaactivitiesstats1 libplasmaquick6 libpowerdevilcore2
+  libprocesscore10 libqt6core5compat6 libqt6core6t64 libqt6dbus6
+  libqt6gui6 libqt6multimedia6 libqt6network6 libqt6opengl6
+  libqt6openglwidgets6 libqt6positioning6 libqt6positioning6-plugins
+  libqt6positioningquick6 libqt6printsupport6 libqt6qml6
+  libqt6qmlmodels6 libqt6qmlworkerscript6 libqt6quick6
+  libqt6quickcontrols2-6 libqt6quickshapes6 libqt6quicktemplates2-6
+  libqt6quickwidgets6 libqt6sensors6 libqt6serialport6
+  libqt6shadertools6 libqt6sql6 libqt6sql6-sqlite libqt6svg6
+  libqt6svgwidgets6 libqt6test6 libqt6texttospeech6
+  libqt6virtualkeyboard6 libqt6waylandclient6 libqt6waylandcompositor6
+  libqt6webchannel6 libqt6webchannelquick6 libqt6webengine6-data
+  libqt6webenginecore6 libqt6webenginecore6-bin libqt6webenginequick6
+  libqt6webenginewidgets6 libqt6webview6 libqt6widgets6
+  libqt6wlshellintegration6 libqt6xml6 libtaskmanager6 okular
+  plasma-desktop plasma-desktop-data plasma-integration
+  plasma-workspace powerdevil powerdevil-data python3-pyqt6
+  qml6-module-org-kde-activities qml6-module-org-kde-desktop
+  qml6-module-org-kde-kirigami
+  qml6-module-org-kde-plasma-plasma5support
+  qml6-module-qt-labs-platform qml6-module-qt-labs-qmlmodels
+  qml6-module-qt5compat-graphicaleffects qml6-module-qtmultimedia
+  qml6-module-qtpositioning qml6-module-qtquick
+  qml6-module-qtquick-controls qml6-module-qtquick-dialogs
+  qml6-module-qtquick-effects qml6-module-qtquick-layouts
+  qml6-module-qtquick-particles qml6-module-qtquick-templates
+  qml6-module-qtquick-virtualkeyboard qml6-module-qtwebengine
+  qml6-module-qtwebview qt6-base-dev-tools qt6-gtk-platformtheme
+  qt6-qpa-plugins qt6-svg-plugins qt6-virtualkeyboard-plugin
+  qt6-wayland qt6ct xdg-desktop-portal-kde xwaylandvideobridge
+151 upgraded, 8 newly installed, 1 to remove and 119 not upgraded.
+Need to get 101 MB/209 MB of archives.
+After this operation, 28.6 MB disk space will be freed.
+Do you want to continue? [Y/n] y
+Err:1 http://http.kali.org/kali kali-rolling/main amd64 libkwin6 amd64 4:6.3.4-2
+  404  Not Found [IP: 54.39.128.230 80]
+Err:2 http://http.kali.org/kali kali-rolling/main amd64 kwin-x11 amd64 4:6.3.4-2
+  404  Not Found [IP: 54.39.128.230 80]
+Err:3 http://http.kali.org/kali kali-rolling/main amd64 kwin-wayland amd64 4:6.3.4-2
+  404  Not Found [IP: 54.39.128.230 80]
+Err:4 http://http.kali.org/kali kali-rolling/main amd64 kwin-common amd64 4:6.3.4-2
+  404  Not Found [IP: 54.39.128.230 80]
+Ign:5 http://http.kali.org/kali kali-rolling/main amd64 kwin-data all 4:6.3.4-2
+Err:6 http://http.kali.org/kali kali-rolling/main amd64 libqt6webenginequick6 amd64 6.8.2+dfsg-3
+  404  Not Found [IP: 54.39.128.230 80]
+Err:7 http://http.kali.org/kali kali-rolling/main amd64 qml6-module-qtwebengine amd64 6.8.2+dfsg-3
+  404  Not Found [IP: 54.39.128.230 80]
+Err:8 http://http.kali.org/kali kali-rolling/main amd64 libqt6webenginewidgets6 amd64 6.8.2+dfsg-3
+  404  Not Found [IP: 54.39.128.230 80]
+Err:9 http://http.kali.org/kali kali-rolling/main amd64 libqt6webenginecore6 amd64 6.8.2+dfsg-3
+  404  Not Found [IP: 54.39.128.230 80]
+Ign:10 http://http.kali.org/kali kali-rolling/main amd64 libqt6webengine6-data all 6.8.2+dfsg-3
+Err:11 http://http.kali.org/kali kali-rolling/main amd64 libqt6webenginecore6-bin amd64 6.8.2+dfsg-3
+  404  Not Found [IP: 54.39.128.230 80]
+Err:12 http://http.kali.org/kali kali-rolling/main amd64 libqt6multimedia6 amd64 6.8.2-7
+  404  Not Found [IP: 54.39.128.230 80]
+Err:13 http://http.kali.org/kali kali-rolling/main amd64 qml6-module-qtmultimedia amd64 6.8.2-7
+  404  Not Found [IP: 54.39.128.230 80]
+Err:14 http://http.kali.org/kali kali-rolling/main amd64 libqt6virtualkeyboard6 amd64 6.8.2+dfsg-2
+  404  Not Found [IP: 54.39.128.230 80]
+Err:15 http://http.kali.org/kali kali-rolling/main amd64 qt6-virtualkeyboard-plugin amd64 6.8.2+dfsg-2
+  404  Not Found [IP: 54.39.128.230 80]
+Err:16 http://http.kali.org/kali kali-rolling/main amd64 qml6-module-qtquick-virtualkeyboard amd64 6.8.2+dfsg-2
+  404  Not Found [IP: 54.39.128.230 80]
+Err:17 http://http.kali.org/kali kali-rolling/main amd64 kate amd64 4:24.12.3-2
+  404  Not Found [IP: 54.39.128.230 80]
+Err:5 http://http.kali.org/kali kali-rolling/main amd64 kwin-data all 4:6.3.4-2
+  404  Not Found [IP: 54.39.128.230 80]
+Err:10 http://http.kali.org/kali kali-rolling/main amd64 libqt6webengine6-data all 6.8.2+dfsg-3
+  404  Not Found [IP: 54.39.128.230 80]
+E: Failed to fetch http://http.kali.org/kali/pool/main/k/kwin/libkwin6_6.3.4-2_amd64.deb  404  Not Found [IP: 54.39.128.230 80]
+E: Failed to fetch http://http.kali.org/kali/pool/main/k/kwin/kwin-x11_6.3.4-2_amd64.deb  404  Not Found [IP: 54.39.128.230 80]
+E: Failed to fetch http://http.kali.org/kali/pool/main/k/kwin/kwin-wayland_6.3.4-2_amd64.deb  404  Not Found [IP: 54.39.128.230 80]
+E: Failed to fetch http://http.kali.org/kali/pool/main/k/kwin/kwin-common_6.3.4-2_amd64.deb  404  Not Found [IP: 54.39.128.230 80]
+E: Failed to fetch http://http.kali.org/kali/pool/main/k/kwin/kwin-data_6.3.4-2_all.deb  404  Not Found [IP: 54.39.128.230 80]
+E: Failed to fetch http://http.kali.org/kali/pool/main/q/qt6-webengine/libqt6webenginequick6_6.8.2%2bdfsg-3_amd64.deb  404  Not Found [IP: 54.39.128.230 80]
+E: Failed to fetch http://http.kali.org/kali/pool/main/q/qt6-webengine/qml6-module-qtwebengine_6.8.2%2bdfsg-3_amd64.deb  404  Not Found [IP: 54.39.128.230 80]
+E: Failed to fetch http://http.kali.org/kali/pool/main/q/qt6-webengine/libqt6webenginewidgets6_6.8.2%2bdfsg-3_amd64.deb  404  Not Found [IP: 54.39.128.230 80]
+E: Failed to fetch http://http.kali.org/kali/pool/main/q/qt6-webengine/libqt6webenginecore6_6.8.2%2bdfsg-3_amd64.deb  404  Not Found [IP: 54.39.128.230 80]
+E: Failed to fetch http://http.kali.org/kali/pool/main/q/qt6-webengine/libqt6webengine6-data_6.8.2%2bdfsg-3_all.deb  404  Not Found [IP: 54.39.128.230 80]
+E: Failed to fetch http://http.kali.org/kali/pool/main/q/qt6-webengine/libqt6webenginecore6-bin_6.8.2%2bdfsg-3_amd64.deb  404  Not Found [IP: 54.39.128.230 80]
+E: Failed to fetch http://http.kali.org/kali/pool/main/q/qt6-multimedia/libqt6multimedia6_6.8.2-7_amd64.deb  404  Not Found [IP: 54.39.128.230 80]
+E: Failed to fetch http://http.kali.org/kali/pool/main/q/qt6-multimedia/qml6-module-qtmultimedia_6.8.2-7_amd64.deb  404  Not Found [IP: 54.39.128.230 80]
+E: Failed to fetch http://http.kali.org/kali/pool/main/q/qt6-virtualkeyboard/libqt6virtualkeyboard6_6.8.2%2bdfsg-2_amd64.deb  404  Not Found [IP: 54.39.128.230 80]
+E: Failed to fetch http://http.kali.org/kali/pool/main/q/qt6-virtualkeyboard/qt6-virtualkeyboard-plugin_6.8.2%2bdfsg-2_amd64.deb  404  Not Found [IP: 54.39.128.230 80]
+E: Failed to fetch http://http.kali.org/kali/pool/main/q/qt6-virtualkeyboard/qml6-module-qtquick-virtualkeyboard_6.8.2%2bdfsg-2_amd64.deb  404  Not Found [IP: 54.39.128.230 80]
+E: Failed to fetch http://http.kali.org/kali/pool/main/k/kate/kate_24.12.3-2_amd64.deb  404  Not Found [IP: 54.39.128.230 80]
+E: Unable to fetch some archives, maybe run apt-get update or try with --fix-missing?
+(myenv) ┌─[mighty@kali] - [~/Code Stack/ModernBrowser] - [Fri May 16, 22:57]                                                                    
+└─[$] <git:(main*)> python main.py             
+Gtk-Message: 22:57:42.795: Failed to load module "window-decorations-gtk-module"
+Gtk-Message: 22:57:42.795: Failed to load module "colorreload-gtk-module"
+Traceback (most recent call last):
+  File "/home/mighty/Code Stack/ModernBrowser/main.py", line 16, in <module>                                                                    
+    browser = Browser()
+  File "/home/mighty/Code Stack/ModernBrowser/browser.py", line 37, in __init__                                                                 
+    self.setup_menu_bar()
+    ~~~~~~~~~~~~~~~~~~~^^
+  File "/home/mighty/Code Stack/ModernBrowser/browser.py", line 84, in setup_menu_bar                                                           
+    new_tab_action.triggered.connect(self.tabs.add_new_tab)
+                                     ^^^^^^^^^
+AttributeError: 'Browser' object has no attribute 'tabs'
+(myenv) ┌─[mighty@kali] - [~/Code Stack/ModernBrowser] - [Fri May 16, 22:57]                                                                    
+└─[$] <git:(main*)> python fixed_browser.py 
+Gtk-Message: 22:57:55.657: Failed to load module "window-decorations-gtk-module"
+Gtk-Message: 22:57:55.657: Failed to load module "colorreload-gtk-module"
+Traceback (most recent call last):
+  File "/home/mighty/Code Stack/ModernBrowser/fixed_browser.py", line 663, in <module>                                                          
+    browser = ModernBrowser()
+  File "/home/mighty/Code Stack/ModernBrowser/fixed_browser.py", line 421, in __init__                                                          
+    self.setup_menu_bar()
+    ~~~~~~~~~~~~~~~~~~~^^
+  File "/home/mighty/Code Stack/ModernBrowser/fixed_browser.py", line 468, in setup_menu_bar                                                    
+    new_tab_action.triggered.connect(self.tabs.add_new_tab)
+                                     ^^^^^^^^^
+AttributeError: 'ModernBrowser' object has no attribute 'tabs'
+(myenv) ┌─[mighty@kali] - [~
