@@ -510,11 +510,11 @@ class ModernBrowser(QMainWindow):
         self.main_layout.setContentsMargins(10, 10, 10, 10)
         self.main_layout.setSpacing(5)
         
+        # Setup tabs first (needed for menu bar actions)
+        self.tabs = BrowserTabs(self)
+        
         # Setup menu bar
         self.setup_menu_bar()
-        
-        # Setup tabs
-        self.tabs = BrowserTabs(self)
         
         # Navigation controls
         self.nav_bar = NavigationBar(self)
