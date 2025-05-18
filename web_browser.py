@@ -40,11 +40,24 @@ from PyQt6.QtGui import QIcon, QKeySequence, QShortcut, QAction, QColor, QPalett
 
 # Try to import WebEngine components
 try:
-    from PyQt6.QtWebEngineWidgets import QWebEngineView, QWebEngineSettings
+    from PyQt6.QtWebEngineWidgets import QWebEngineView
     from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineUrlRequestInterceptor
+    # Try to import settings separately
+    try:
+        from PyQt6.QtWebEngineWidgets import QWebEngineSettings
+        SETTINGS_AVAILABLE = True
+    except ImportError:
+        SETTINGS_AVAILABLE = False
+        print("WebEngine settings not available, using default settings")
     WEB_ENGINE_AVAILABLE = True
-except ImportError:
+    print("Successfully imported WebEngine components")
+except ImportError as e:
     WEB_ENGINE_AVAILABLE = False
+    print(f"WebEngine import error: {str(e)}")
+    print("WebEngine components not available. Using simplified browser.")
+except Exception as e:
+    WEB_ENGINE_AVAILABLE = False
+    print(f"Unexpected error importing WebEngine: {str(e)}")
     print("WebEngine components not available. Using simplified browser.")
 
 # Security Manager for handling security features
@@ -204,17 +217,66 @@ class DatabaseManager:
             return
             
         try:
-            # Check if port column exists
-            self.cursor.execute("PRAGMA table_info(visits)")
-            columns = [column[1] for column in self.cursor.fetchall()]
-            
-            if 'port' not in columns:
-                # Add port column
-                self.cursor.execute("ALTER TABLE visits ADD COLUMN port INTEGER")
+            # Check if visits table exists
+            self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='visits'")
+            if not self.cursor.fetchone():
+                # Create visits table with all required columns
+                self.cursor.execute('''
+                    CREATE TABLE visits (
+                        id INTEGER PRIMARY KEY,
+                        url TEXT NOT NULL,
+                        title TEXT,
+                        ip_address TEXT,
+                        port INTEGER,
+                        ssl_valid BOOLEAN,
+                        security_status TEXT,
+                        visit_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
                 self.conn.commit()
-                print("Database migrated: Added port column")
+                print("Created visits table with all required columns")
+                return
+
+            # Check existing columns
+            self.cursor.execute("PRAGMA table_info(visits)")
+            columns = {column[1] for column in self.cursor.fetchall()}
+            
+            # Add missing columns
+            if 'port' not in columns:
+                self.cursor.execute("ALTER TABLE visits ADD COLUMN port INTEGER")
+                print("Added port column")
+            
+            if 'ssl_valid' not in columns:
+                self.cursor.execute("ALTER TABLE visits ADD COLUMN ssl_valid BOOLEAN")
+                print("Added ssl_valid column")
+            
+            if 'security_status' not in columns:
+                self.cursor.execute("ALTER TABLE visits ADD COLUMN security_status TEXT")
+                print("Added security_status column")
+            
+            self.conn.commit()
+            print("Database migration completed successfully")
         except Exception as e:
             print(f"Error during database migration: {e}")
+            # If migration fails, try recreating the table
+            try:
+                self.cursor.execute("DROP TABLE IF EXISTS visits")
+                self.cursor.execute('''
+                    CREATE TABLE visits (
+                        id INTEGER PRIMARY KEY,
+                        url TEXT NOT NULL,
+                        title TEXT,
+                        ip_address TEXT,
+                        port INTEGER,
+                        ssl_valid BOOLEAN,
+                        security_status TEXT,
+                        visit_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                self.conn.commit()
+                print("Recreated visits table with all required columns")
+            except Exception as e:
+                print(f"Error recreating visits table: {e}")
     
     def create_tables(self):
         if self.incognito or not self.cursor:
@@ -483,14 +545,15 @@ class BrowserTab(QWidget):
                 page = QWebEnginePage(profile, self.web_view)
                 self.web_view.setPage(page)
             
-            # Enable security features
-            settings = self.web_view.settings()
-            settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, False)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, False)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, False)
-            settings.setAttribute(QWebEngineSettings.WebAttribute.PluginsEnabled, False)
+            # Enable security features if settings are available
+            if SETTINGS_AVAILABLE:
+                settings = self.web_view.settings()
+                settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
+                settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, False)
+                settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, False)
+                settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
+                settings.setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, False)
+                settings.setAttribute(QWebEngineSettings.WebAttribute.PluginsEnabled, False)
             
             # Connect signals
             self.web_view.loadStarted.connect(self.on_load_started)
@@ -516,7 +579,10 @@ class BrowserTab(QWidget):
         if isinstance(url, str):
             url = QUrl(url)
         
-        self.web_view.load(url)
+        if isinstance(url, QUrl):
+            self.web_view.load(url)
+        else:
+            print(f"Invalid URL type: {type(url)}")
     
     def on_load_started(self):
         """Handle load started"""
@@ -542,12 +608,43 @@ class BrowserTab(QWidget):
         if self.browser:
             self.browser.update_address_bar(url)
             
-            # Record visit if not incognito
-            if not self.browser.incognito_mode:
-                url_str = url.toString()
-                if url_str != "about:blank":
-                    title = self.web_view.title()
-                    self.browser.db_manager.add_visit(url_str, title)
+            # Get and display IP information
+            url_str = url.toString()
+            if url_str != "about:blank":
+                try:
+                    parsed_url = urlparse(url_str)
+                    domain = parsed_url.netloc
+                    if domain:
+                        ip_address = socket.gethostbyname(domain)
+                        port = parsed_url.port or (443 if parsed_url.scheme == 'https' else 80)
+                        
+                        # Check SSL and security status
+                        ssl_valid, cert = self.browser.security_manager.check_ssl_certificate(url_str)
+                        is_phishing = self.browser.security_manager.is_phishing_site(url_str)
+                        
+                        # Determine security status
+                        if is_phishing:
+                            security_status = "Phishing Site"
+                        elif not ssl_valid:
+                            security_status = "Insecure Connection"
+                        else:
+                            security_status = "Secure Connection"
+                        
+                        # Update status bar
+                        self.browser.status_bar.showMessage(
+                            f"Connecting to: {domain} ({ip_address}:{port}) - {security_status}"
+                        )
+                        
+                        # Record visit if not incognito
+                        if not self.browser.incognito_mode:
+                            title = self.web_view.title()
+                            security_info = {
+                                'ssl_valid': ssl_valid,
+                                'status': security_status
+                            }
+                            self.browser.db_manager.add_visit(url_str, title, security_info)
+                except Exception as e:
+                    self.browser.status_bar.showMessage(f"Error resolving {domain}: {str(e)}")
     
     def on_title_changed(self, title):
         """Handle title changed"""
@@ -642,20 +739,40 @@ class BrowserTabs(QTabWidget):
     
     def add_new_tab(self, url=None):
         """Add a new browser tab"""
-        if url is None:
-            url = QUrl("https://www.google.com")
-        
-        # Create new tab
-        tab = BrowserTab(self.browser)
-        
-        # Add tab to widget
-        index = self.addTab(tab, "New Tab")
-        self.setCurrentIndex(index)
-        
-        # Load URL
-        tab.load(url)
-        
-        return tab
+        try:
+            # Create new tab
+            tab = BrowserTab(self.browser)
+            
+            # Add tab to widget
+            index = self.addTab(tab, "New Tab")
+            self.setCurrentIndex(index)
+            
+            # Set default URL if none provided
+            if url is None:
+                url = QUrl("https://www.google.com")
+            elif isinstance(url, str):
+                if not url.startswith(('http://', 'https://')):
+                    url = 'http://' + url
+                url = QUrl(url)
+            
+            # Load the URL
+            if isinstance(url, QUrl):
+                tab.load(url)
+            else:
+                tab.load(QUrl("https://www.google.com"))
+            
+            return tab
+        except Exception as e:
+            print(f"Error creating new tab: {e}")
+            # If there's an error, try to create a tab with default URL
+            try:
+                tab = BrowserTab(self.browser)
+                index = self.addTab(tab, "New Tab")
+                self.setCurrentIndex(index)
+                tab.load(QUrl("https://www.google.com"))
+                return tab
+            except:
+                return None
     
     def close_tab(self, index):
         """Close tab at index"""
@@ -1170,10 +1287,19 @@ class IPTrackerDialog(QDialog):
                 security_status = visit['security_status']
                 timestamp = visit['visit_time']
                 
-                # Create a formatted item
-                item_text = f"{title}\nIP: {ip}:{port}\nSSL: {ssl_valid}\nSecurity: {security_status}\nTime: {timestamp}"
+                # Create a formatted item with detailed SSL info
+                ssl_info = "🔒 SSL Enabled (HTTPS)" if ssl_valid else "⚠️ SSL Disabled (HTTP)"
+                item_text = f"{title}\nIP: {ip}:{port}\n{ssl_info}\nSecurity: {security_status}\nTime: {timestamp}"
                 item = QListWidgetItem(item_text)
                 item.setData(Qt.ItemDataRole.UserRole, url)
+                
+                # Set color based on security status
+                if security_status == "Secure Connection":
+                    item.setBackground(QColor("#e8f5e9"))  # Light green
+                elif security_status == "Insecure Connection":
+                    item.setBackground(QColor("#fff3e0"))  # Light orange
+                elif security_status == "Phishing Site":
+                    item.setBackground(QColor("#ffebee"))  # Light red
                 
                 self.ip_list.addItem(item)
             except (KeyError, TypeError):
@@ -1579,6 +1705,17 @@ class WebBrowser(QMainWindow):
         
         # Update address bar
         self.address_bar.setText(url_str)
+        
+        # Show connection information
+        try:
+            parsed_url = urlparse(url_str)
+            domain = parsed_url.netloc
+            if domain:
+                ip_address = socket.gethostbyname(domain)
+                port = parsed_url.port or (443 if parsed_url.scheme == 'https' else 80)
+                self.status_bar.showMessage(f"Connecting to: {domain} ({ip_address}:{port})")
+        except Exception as e:
+            self.status_bar.showMessage(f"Error resolving {domain}: {str(e)}")
         
         # Navigate to URL in current tab
         current_tab = self.tabs.currentWidget()
