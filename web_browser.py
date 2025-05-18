@@ -8,9 +8,9 @@ import re
 import sqlite3
 import socket
 import ssl
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import hashlib
 
 # Try to import optional security packages
@@ -46,7 +46,7 @@ try:
     try:
         from PyQt6.QtWebEngineWidgets import QWebEngineSettings
         SETTINGS_AVAILABLE = True
-    except ImportError:
+except ImportError:
         SETTINGS_AVAILABLE = False
         print("WebEngine settings not available, using default settings")
     WEB_ENGINE_AVAILABLE = True
@@ -60,9 +60,134 @@ except Exception as e:
     print(f"Unexpected error importing WebEngine: {str(e)}")
     print("WebEngine components not available. Using simplified browser.")
 
+# Add this new class for enhanced security
+class EnhancedSecurityManager:
+    def __init__(self):
+        self.malicious_patterns = {
+            'sql_injection': r"(\b(SELECT|INSERT|UPDATE|DELETE|DROP|UNION|ALTER)\b.*\b(FROM|INTO|WHERE)\b)",
+            'xss': r"(<script|javascript:|data:text/html|vbscript:|onload=|onerror=)",
+            'path_traversal': r"(\.\.\/|\.\.\\|~\/|~\\|\/etc\/|\/var\/|\/proc\/)",
+            'command_injection': r"(;|\||&|`|\$\(|\$\{|\n|\r)"
+        }
+        self.known_malicious_domains = set()
+        self.ssl_cache = {}
+        self.last_update = None
+        self.update_interval = timedelta(hours=24)
+        
+    def update_security_data(self):
+        """Update security data from online sources"""
+        if self.last_update and datetime.now() - self.last_update < self.update_interval:
+            return
+            
+        try:
+            # Update malicious domains list
+            response = requests.get('https://openphish.com/feed.txt', timeout=5)
+            if response.status_code == 200:
+                self.known_malicious_domains.update(response.text.splitlines())
+            
+            # Update SSL certificate transparency logs
+            response = requests.get('https://crt.sh/?q=%.com&output=json', timeout=5)
+            if response.status_code == 200:
+                for cert in response.json():
+                    if 'name_value' in cert:
+                        self.ssl_cache[cert['name_value']] = cert
+            
+            self.last_update = datetime.now()
+        except Exception as e:
+            print(f"Error updating security data: {e}")
+    
+    def check_url_safety(self, url):
+        """Check URL for various security issues"""
+        try:
+            parsed_url = urlparse(url)
+            domain = parsed_url.netloc
+            
+            # Check for malicious patterns in URL
+            for pattern_name, pattern in self.malicious_patterns.items():
+                if re.search(pattern, url, re.I):
+                    return False, f"URL contains potentially malicious {pattern_name} pattern"
+            
+            # Check domain against known malicious domains
+            if domain in self.known_malicious_domains:
+                return False, "Domain is known to be malicious"
+            
+            # Check for suspicious TLDs
+            suspicious_tlds = {'.xyz', '.tk', '.ml', '.ga', '.cf'}
+            if any(domain.endswith(tld) for tld in suspicious_tlds):
+                return True, "Warning: Suspicious TLD detected"
+            
+            return True, "URL appears safe"
+        except Exception as e:
+            return False, f"Error checking URL safety: {str(e)}"
+    
+    def validate_ssl_certificate(self, url):
+        """Enhanced SSL certificate validation"""
+        try:
+            parsed_url = urlparse(url)
+            domain = parsed_url.netloc
+            
+            # Check SSL cache first
+            if domain in self.ssl_cache:
+                cert_info = self.ssl_cache[domain]
+                if datetime.fromtimestamp(cert_info['not_after']) < datetime.now():
+                    return False, "SSL certificate has expired"
+            
+            # Create SSL context with strict validation
+            context = ssl.create_default_context()
+            context.check_hostname = True
+            context.verify_mode = ssl.CERT_REQUIRED
+            
+            with socket.create_connection((domain, 443), timeout=5) as sock:
+                with context.wrap_socket(sock, server_hostname=domain) as ssock:
+                    cert = ssock.getpeercert()
+                    
+                    # Check certificate expiration
+                    not_after = datetime.strptime(cert['notAfter'], '%b %d %H:%M:%S %Y %Z')
+                    if not_after < datetime.now():
+                        return False, "SSL certificate has expired"
+                    
+                    # Check certificate issuer
+                    issuer = dict(x[0] for x in cert['issuer'])
+                    if 'organizationName' not in issuer:
+                        return False, "Invalid certificate issuer"
+                    
+                    return True, cert
+        except Exception as e:
+            return False, str(e)
+    
+    def check_content_security(self, url, content_type, headers):
+        """Check content security headers and type"""
+        try:
+            # Check Content-Type header
+            if content_type:
+                if 'text/html' in content_type and 'X-Content-Type-Options: nosniff' not in headers:
+                    return False, "Missing X-Content-Type-Options header"
+            
+            # Check for security headers
+            required_headers = {
+                'X-Frame-Options': r'(DENY|SAMEORIGIN)',
+                'X-XSS-Protection': r'1',
+                'X-Content-Type-Options': r'nosniff',
+                'Strict-Transport-Security': r'max-age=\d+',
+                'Content-Security-Policy': r".*"
+            }
+            
+            missing_headers = []
+            for header, pattern in required_headers.items():
+                if header not in headers or not re.search(pattern, headers[header], re.I):
+                    missing_headers.append(header)
+            
+            if missing_headers:
+                return False, f"Missing security headers: {', '.join(missing_headers)}"
+            
+            return True, "Content security checks passed"
+        except Exception as e:
+            return False, f"Error checking content security: {str(e)}"
+
 # Security Manager for handling security features
 class SecurityManager:
     def __init__(self):
+        self.enhanced_security = EnhancedSecurityManager()
         self.phishing_domains = set()
         self.known_malicious_ips = set()
         self.load_security_data()
@@ -97,22 +222,11 @@ class SecurityManager:
             print(f"Error loading security data: {e}")
     
     def check_ssl_certificate(self, url):
-        """Check SSL certificate validity"""
-        try:
-            parsed_url = urlparse(url)
-            hostname = parsed_url.netloc
-            
-            # Create SSL context
-            context = ssl.create_default_context()
-            with socket.create_connection((hostname, 443)) as sock:
-                with context.wrap_socket(sock, server_hostname=hostname) as ssock:
-                    cert = ssock.getpeercert()
-                    return True, cert
-        except Exception as e:
-            return False, str(e)
+        """Check SSL certificate validity with enhanced checks"""
+        return self.enhanced_security.validate_ssl_certificate(url)
     
     def is_phishing_site(self, url):
-        """Check if URL is a known phishing site"""
+        """Enhanced phishing site detection"""
         try:
             parsed_url = urlparse(url)
             domain = parsed_url.netloc
@@ -127,12 +241,22 @@ class SecurityManager:
                 r'secure.*\.com',
                 r'account.*\.com',
                 r'verify.*\.com',
-                r'confirm.*\.com'
+                r'confirm.*\.com',
+                r'update.*\.com',
+                r'security.*\.com',
+                r'bank.*\.com',
+                r'paypal.*\.com',
+                r'ebay.*\.com'
             ]
             
             for pattern in suspicious_patterns:
                 if re.search(pattern, domain, re.I):
                     return True
+            
+            # Check URL safety
+            is_safe, reason = self.enhanced_security.check_url_safety(url)
+            if not is_safe:
+                return True
             
             return False
         except:
@@ -514,17 +638,25 @@ class BrowserTab(QWidget):
     def __init__(self, browser):
         super().__init__()
         self.browser = browser
+        self.security_headers = {}
         
         # Create layout
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
-        # Security status indicator
+        # Enhanced security status indicator
         self.security_status = QLabel()
         self.security_status.setFixedHeight(20)
         self.security_status.setStyleSheet("background-color: #f0f0f0; padding: 2px;")
         layout.addWidget(self.security_status)
+        
+        # Security details button
+        self.security_details = QPushButton("🔒")
+        self.security_details.setFixedSize(20, 20)
+        self.security_details.setToolTip("View Security Details")
+        self.security_details.clicked.connect(self.show_security_details)
+        layout.addWidget(self.security_details)
         
         # Progress bar
         self.progress_bar = QFrame()
@@ -542,6 +674,8 @@ class BrowserTab(QWidget):
             # Set up profile for incognito mode
             if browser.incognito_mode:
                 profile = QWebEngineProfile()
+                profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.NoPersistentCookies)
+                profile.setHttpCacheType(QWebEngineProfile.HttpCacheType.MemoryHttpCache)
                 page = QWebEnginePage(profile, self.web_view)
                 self.web_view.setPage(page)
             
@@ -554,6 +688,9 @@ class BrowserTab(QWidget):
                 settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
                 settings.setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, False)
                 settings.setAttribute(QWebEngineSettings.WebAttribute.PluginsEnabled, False)
+                settings.setAttribute(QWebEngineSettings.WebAttribute.ScreenCaptureEnabled, False)
+                settings.setAttribute(QWebEngineSettings.WebAttribute.WebSecurityEnabled, True)
+                settings.setAttribute(QWebEngineSettings.WebAttribute.AllowRunningInsecureContent, False)
             
             # Connect signals
             self.web_view.loadStarted.connect(self.on_load_started)
@@ -561,6 +698,9 @@ class BrowserTab(QWidget):
             self.web_view.loadFinished.connect(self.on_load_finished)
             self.web_view.urlChanged.connect(self.on_url_changed)
             self.web_view.titleChanged.connect(self.on_title_changed)
+            
+            # Handle SSL errors
+            self.web_view.page().certificateError.connect(self.handle_ssl_error)
         else:
             # Create a placeholder widget
             self.web_view = QLabel("WebEngine not available. Install PyQt6-WebEngine to view websites.")
@@ -569,6 +709,7 @@ class BrowserTab(QWidget):
         
         # Add widgets to layout
         layout.addWidget(self.progress_bar)
+        layout.addWidget(self.security_details)
         layout.addWidget(self.web_view)
     
     def load(self, url):
@@ -580,7 +721,7 @@ class BrowserTab(QWidget):
             url = QUrl(url)
         
         if isinstance(url, QUrl):
-            self.web_view.load(url)
+        self.web_view.load(url)
         else:
             print(f"Invalid URL type: {type(url)}")
     
@@ -609,8 +750,8 @@ class BrowserTab(QWidget):
             self.browser.update_address_bar(url)
             
             # Get and display IP information
-            url_str = url.toString()
-            if url_str != "about:blank":
+                url_str = url.toString()
+                if url_str != "about:blank":
                 try:
                     parsed_url = urlparse(url_str)
                     domain = parsed_url.netloc
@@ -637,7 +778,7 @@ class BrowserTab(QWidget):
                         
                         # Record visit if not incognito
                         if not self.browser.incognito_mode:
-                            title = self.web_view.title()
+                    title = self.web_view.title()
                             security_info = {
                                 'ssl_valid': ssl_valid,
                                 'status': security_status
@@ -694,20 +835,26 @@ class BrowserTab(QWidget):
         return False
     
     def update_security_status(self, url):
-        """Update security status indicator"""
+        """Update security status indicator with enhanced information"""
         try:
             # Check SSL certificate
-            valid, cert = self.browser.security_manager.check_ssl_certificate(url)
+            ssl_valid, ssl_info = self.browser.security_manager.check_ssl_certificate(url)
             
             # Check for phishing
             is_phishing = self.browser.security_manager.is_phishing_site(url)
+            
+            # Check URL safety
+            url_safe, url_reason = self.browser.security_manager.enhanced_security.check_url_safety(url)
             
             # Update status
             if is_phishing:
                 self.security_status.setText("⚠️ Phishing Site Detected")
                 self.security_status.setStyleSheet("background-color: #ffebee; color: #c62828; padding: 2px;")
-            elif not valid:
+            elif not ssl_valid:
                 self.security_status.setText("⚠️ Insecure Connection")
+                self.security_status.setStyleSheet("background-color: #fff3e0; color: #ef6c00; padding: 2px;")
+            elif not url_safe:
+                self.security_status.setText("⚠️ " + url_reason)
                 self.security_status.setStyleSheet("background-color: #fff3e0; color: #ef6c00; padding: 2px;")
             else:
                 self.security_status.setText("🔒 Secure Connection")
@@ -715,6 +862,77 @@ class BrowserTab(QWidget):
         except:
             self.security_status.setText("⚠️ Security Check Failed")
             self.security_status.setStyleSheet("background-color: #ffebee; color: #c62828; padding: 2px;")
+    
+    def show_security_details(self):
+        """Show detailed security information"""
+        current_url = self.web_view.url().toString()
+        if current_url == "about:blank":
+            return
+            
+        try:
+            parsed_url = urlparse(current_url)
+            domain = parsed_url.netloc
+            
+            # Get security information
+            ssl_valid, ssl_info = self.browser.security_manager.check_ssl_certificate(current_url)
+            is_phishing = self.browser.security_manager.is_phishing_site(current_url)
+            url_safe, url_reason = self.browser.security_manager.enhanced_security.check_url_safety(current_url)
+            
+            # Create security details message
+            details = f"""
+            Security Details for {domain}:
+            
+            SSL Certificate: {'Valid' if ssl_valid else 'Invalid'}
+            {ssl_info if isinstance(ssl_info, str) else 'Certificate details available'}
+            
+            URL Safety: {url_reason}
+            
+            Phishing Check: {'Potential phishing site' if is_phishing else 'Not detected as phishing'}
+            
+            Security Headers:
+            {json.dumps(self.security_headers, indent=2)}
+            """
+            
+            QMessageBox.information(self, "Security Details", details)
+        except Exception as e:
+            QMessageBox.warning(self, "Security Details", f"Error getting security details: {str(e)}")
+    
+    def handle_ssl_error(self, error):
+        """Handle SSL certificate errors"""
+        try:
+            url = error.url().toString()
+            error_type = error.error()
+            error_description = error.errorDescription()
+            
+            # Check if the error is critical
+            critical_errors = {
+                QWebEngineCertificateError.Error.SslPinnedKeyNotInCertificateChain,
+                QWebEngineCertificateError.Error.CertificateAuthorityInvalid,
+                QWebEngineCertificateError.Error.CertificateNotYetValid,
+                QWebEngineCertificateError.Error.CertificateHasWeakSignature
+            }
+            
+            if error_type in critical_errors:
+                # Show warning and block access
+                QMessageBox.warning(
+                    self,
+                    "Security Warning",
+                    f"SSL Certificate Error:\n{error_description}\n\nAccess to {url} has been blocked for security reasons."
+                )
+                return False
+            
+            # For non-critical errors, ask user
+            reply = QMessageBox.question(
+                self,
+                "SSL Certificate Error",
+                f"SSL Certificate Error:\n{error_description}\n\nDo you want to proceed anyway?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            
+            return reply == QMessageBox.StandardButton.Yes
+        except Exception as e:
+            print(f"Error handling SSL error: {e}")
+        return False
 
 # Tabs widget to manage multiple browser tabs
 class BrowserTabs(QTabWidget):
@@ -740,13 +958,13 @@ class BrowserTabs(QTabWidget):
     def add_new_tab(self, url=None):
         """Add a new browser tab"""
         try:
-            # Create new tab
-            tab = BrowserTab(self.browser)
-            
-            # Add tab to widget
-            index = self.addTab(tab, "New Tab")
-            self.setCurrentIndex(index)
-            
+        # Create new tab
+        tab = BrowserTab(self.browser)
+        
+        # Add tab to widget
+        index = self.addTab(tab, "New Tab")
+        self.setCurrentIndex(index)
+        
             # Set default URL if none provided
             if url is None:
                 url = QUrl("https://www.google.com")
@@ -757,11 +975,11 @@ class BrowserTabs(QTabWidget):
             
             # Load the URL
             if isinstance(url, QUrl):
-                tab.load(url)
+        tab.load(url)
             else:
                 tab.load(QUrl("https://www.google.com"))
-            
-            return tab
+        
+        return tab
         except Exception as e:
             print(f"Error creating new tab: {e}")
             # If there's an error, try to create a tab with default URL
@@ -1313,6 +1531,7 @@ class WebBrowser(QMainWindow):
         # Browser state
         self.incognito_mode = incognito
         self.dark_mode = False
+        self.incognito_windows = []  # Track incognito windows
         
         # Initialize security manager
         self.security_manager = SecurityManager()
@@ -1795,15 +2014,71 @@ class WebBrowser(QMainWindow):
                 self.db_manager.save_setting("dark_mode", "1" if enabled else "0")
     
     def open_incognito_window(self):
-        """Open a new incognito window"""
+        """Open a new incognito window with proper cleanup"""
+        try:
+            # Create new incognito window
         incognito_browser = WebBrowser(incognito=True)
+            
+            # Store reference to prevent garbage collection
+            self.incognito_windows.append(incognito_browser)
+            
+            # Connect to destroyed signal for cleanup
+            incognito_browser.destroyed.connect(lambda: self.cleanup_incognito_window(incognito_browser))
+            
+            # Show the window
         incognito_browser.show()
+            
+            return incognito_browser
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to open incognito window: {str(e)}")
+            return None
+    
+    def cleanup_incognito_window(self, window):
+        """Clean up incognito window resources"""
+        try:
+            if window in self.incognito_windows:
+                self.incognito_windows.remove(window)
+            
+            # Clean up WebEngine resources
+            if hasattr(window, 'tabs'):
+                for i in range(window.tabs.count()):
+                    tab = window.tabs.widget(i)
+                    if hasattr(tab, 'web_view'):
+                        tab.web_view.setPage(None)
+                        tab.web_view.deleteLater()
+            
+            # Force garbage collection
+            import gc
+            gc.collect()
+        except Exception as e:
+            print(f"Error cleaning up incognito window: {e}")
     
     def closeEvent(self, event):
-        """Handle window close event"""
-        # In a real browser, we might ask for confirmation
-        # Clean up resources
+        """Handle window close event with proper cleanup"""
+        try:
+            # Clean up incognito windows
+            for window in self.incognito_windows[:]:
+                window.close()
+            
+            # Clean up WebEngine resources
+            if hasattr(self, 'tabs'):
+                for i in range(self.tabs.count()):
+                    tab = self.tabs.widget(i)
+                    if hasattr(tab, 'web_view'):
+                        tab.web_view.setPage(None)
+                        tab.web_view.deleteLater()
+            
+            # Clean up database
+            if hasattr(self, 'db_manager'):
         self.db_manager.close()
+            
+            # Force garbage collection
+            import gc
+            gc.collect()
+            
+            event.accept()
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
         event.accept()
 
 if __name__ == "__main__":
